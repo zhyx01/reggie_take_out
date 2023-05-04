@@ -4,14 +4,18 @@ import com.ax.reggie.common.R;
 import com.ax.reggie.entity.User;
 import com.ax.reggie.mapper.UserMapper;
 import com.ax.reggie.service.UserService;
+import com.ax.reggie.utils.SMSUtils;
 import com.ax.reggie.utils.ValidateCodeUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.servlet.http.HttpSession;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * className: UserServiceImpl
@@ -23,6 +27,9 @@ import java.util.Map;
 @Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService{
+
+    @Autowired
+    private RedisTemplate redisTemplate;
 
 
     /** 签名 */
@@ -42,12 +49,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             log.info("随机生成的验证码是: {}", code);
 
             // 调用阿里云提供的短信服务API完成发送短信
-            //SMSUtils.sendMessage(SIGN_NAME, TEMPLATE_CODE, phone, code);
+            SMSUtils.sendMessage(SIGN_NAME, TEMPLATE_CODE, phone, code);
 
             // 将生成的短信保存到session
-            session.setAttribute(phone, code);
+            //session.setAttribute(phone, code);
 
-            log.info("存入session的验证码是: {}", session.getAttribute(phone));
+            // 将生成的验证码存入redis中
+            redisTemplate.opsForValue().set("login:code:" + phone, code, 5, TimeUnit.MINUTES);
+
+            log.info("存入redis的验证码是: {}", code);
 
             return R.success("短信发送成功");
         }
@@ -65,9 +75,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String code = map.get("code").toString();
 
         // 从session中获取保存的验证码
-        Object codeInSession = session.getAttribute(phone);
+        //Object codeInSession = session.getAttribute(phone);
 
-        log.info("session中保存的验证码是: {}", codeInSession);
+        // 从redis中获取验证码
+        Object codeInSession = redisTemplate.opsForValue().get("login:code:" + phone);
+
+        log.info("redis中保存的验证码是: {}", codeInSession);
 
         // 进行验证码的比对 (页面提交的和session中存的进行比对)
         if (codeInSession != null && codeInSession.equals(code)) {
@@ -85,6 +98,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 save(user);
             }
             session.setAttribute("user", user.getId());
+
+            // 登录成功, 删除redis中的验证码
+            redisTemplate.delete("login:code:" + phone);
+
             return R.success(user);
         }
         return R.error("登录失败");
