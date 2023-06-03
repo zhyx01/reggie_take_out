@@ -14,8 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SMSUtils {
 
-	private static final String ACCESSKEY_ID = "LTAI5tAGGhybfKuKwHeyV91b";
-	private static final String SECRET = "a2vwE2L0C9Sbq5vGgPGWSMMcJfQuRJ";
+	private static final String ACCESSKEY_ID = "";
+	private static final String SECRET = "";
 
 	/**
 	 * 发送短信
